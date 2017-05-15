@@ -77,27 +77,23 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
-        best_model = None
-        min_score = float('inf')
+        best_model = self.base_model(self.n_constant)
+        min_score = float('Inf')
         N = len(self.X)
         num_features = len(self.X[0])
         try:
-	        for num_states in range(self.min_n_components, self.max_n_components+1):
-		    	p = num_states * num_states + 2 * num_states * num_features - 1
-		    	current_model = self.base_model(num_states)
-		    	logL = current_model.score(self.X, self.lengths)
-		    	bic_score = -2 * logL + p * math.log(N)
+            for num_states in range(self.min_n_components, self.max_n_components+1):
+                p = num_states * num_states + 2 * num_states * num_features - 1
+                current_model = self.base_model(num_states)
+                logL = current_model.score(self.X, self.lengths)
+                bic_score = -2 * logL + p * math.log(N)
 
-		    	if bic_score < min_score:
-		    		best_model = current_model
-		    		min_score = bic_score
-		except:
-			pass 
-
-		if best_model is not None:
-			return best_model
-		return None
-
+                if bic_score < min_score:
+                    best_model = current_model
+                    min_score = bic_score
+        except:
+            pass
+        return best_model
 
 class SelectorDIC(ModelSelector):
     """ select best model based on Discriminative Information Criterion
@@ -112,37 +108,32 @@ class SelectorDIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on DIC scores
-        max_dic = float('-inf')
-        best_model = None
-
+        max_dic = float('-Inf')
+        best_model = self.base_model(self.n_constant)
         try:
-        	for num_states in range(self.min_n_components, self.max_n_components+1):
-	        	anti_logL = 0.0
-	        	wc = 0
-	        	current_model = self.base_model(num_states)
-	        	logL = current_model.socre(self.X, self.lengths)
+            for num_states in range(self.min_n_components, self.max_n_components+1):
+                anti_logL = 0.0
+                wc = 0
+                current_model = self.base_model(num_states)
+                logL = current_model.socre(self.X, self.lengths)
 
-	        	for word in self.hwords:
-	        		if word == self.this_word:
-	        			continue
-	        		X, lengths = self.hwords[word]
-	        		anti_logL += current_model.score(X, lengths)  # sum of anti likelihood
-	        		wc += 1
+                for word in self.hwords:
+                    if word == self.this_word:
+                        continue
+                    X, lengths = self.hwords[word]
+                    anti_logL += current_model.score(X, lengths)  # sum of anti likelihood
+                    wc += 1
 
 	        	# average anti sum
-	        	anti_logL /= wc
+                anti_logL /= wc
+                dic_score = logL - anti_logL
 
-	        	dic_score = logL - anti_logL
-	        	if dic_score > max_dic:
-	        		best_model = current_model
-	        		max_dic = dic_score
+                if dic_score > max_dic:
+                    best_model = current_model
+                    max_dic = dic_score
         except:
-        	pass
-
-        if best_model is not None:
-        	return best_model
-        return None
-
+            pass
+        return best_model
 
 class SelectorCV(ModelSelector):
     """ select best model based on average log Likelihood of cross-validation folds
@@ -154,32 +145,27 @@ class SelectorCV(ModelSelector):
 
         # TODO implement model selection using CV
         k_fold = KFold(5)
-        best_score = float('-inf')
-        best_model = None
+        best_score = float('-Inf')
+        best_model = self.base_model(self.n_constant)
         try:
-        	for num_states in range(self.min_n_components, self.max_n_components+1):
-        		fold_scores = []
+            for num_states in range(self.min_n_components, self.max_n_components+1):
+                fold_scores = []
+                for cv_train_idx, cv_test_idx in k_fold.split(self.sequences):  # corss validation index
+                    train_X, train_lengths = combine_sequences(cv_train_idx, self.sequences)
+                    test_X, test_lengths = combine_sequences(cv_test_idx, self.sequences)
 
-        		for cv_train_idx, cv_test_idx in k_fold.split(self.sequences):  # corss validation index
-        			train_X, train_lengths = combine_sequences(cv_train_idx, self.sequences)
-        			test_X, test_lengths = combine_sequences(cv_test_idx, self.sequences)
+                    hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
+                                            random_state=self.random_state, verbose=False).fit(train_X, train_lengths)
 
-        			hmm_model = GaussianHMM(n_components=num_states, covariance_type="diag", n_iter=1000,
-                                    random_state=self.random_state, verbose=False).fit(train_X, train_lengths)
+                    test_score = hmm_model.score(test_X, test_lengths)
+                    fold_scores.append(test_score)
 
-        			test_score = hmm_model.score(test_X, test_lengths)
-        			fold_scores.append(test_score)
-
-        		score = np.mean(fold_scores)  # mean score for current fold
-        		if score > best_score:
-        			best_model = hmm_model
-        			best_score = score
-
+                score = np.mean(fold_scores)  # mean score for current fold
+                if score > best_score:
+                    best_model = hmm_model
+                    best_score = score
         except:
-        	pass
-
-        if best_model is not None:
-        	return best_model
-        return None
+            pass
+        return best_model
 
 
